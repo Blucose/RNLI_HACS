@@ -1,12 +1,12 @@
 {
   "domain": "rnli_launches",
   "name": "RNLI Lifeboat Launches",
-  "codeowners": ["@your_github_username_here"],
-  "config_flow": true, # Changed from false to true
+  "codeowners": ["@Blucose"],
+  "config_flow": true,
   "dependencies": [],
-  "documentation": "https://www.home-assistant.io/integrations/rnli_launches",
+  "documentation": "https://github.com/Blucose/RNLI_HACS/README.MD",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/your_github_username_here/rnli_launches/issues",
+  "issue_tracker": "https://github.com/Blucose/RNLI_HACS/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "version": "0.1.0"
 }
