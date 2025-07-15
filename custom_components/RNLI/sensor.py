@@ -16,7 +16,7 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .const import DOMAIN, RNLI_API_URL # Import constants from const.py
+from .const import DOMAIN, RNLI_API_URL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -156,5 +156,5 @@ class RNLILaunchSensor(CoordinatorEntity, SensorEntity):
     @property
     def icon(self) -> str:
         """Return the icon to use in the frontend."""
-        return "mdi:boat" # You can choose a more specific icon if available
+        return "mdi:boat"
 
