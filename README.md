@@ -8,6 +8,11 @@ launch, with details of the launch (lifeboat ID, station website, etc.) as
 attributes. Data comes from the public RNLI launches feed and is refreshed
 every 5 minutes.
 
+> ❤️ **Enjoying this integration?** The RNLI is a charity that saves lives at
+> sea, funded almost entirely by voluntary donations. If this is useful to you,
+> please consider giving something back to the volunteers whose work makes the
+> data possible: **[Donate to the RNLI »](https://rnli.org/support-us/give-money/donate)**
+
 ## Installation
 
 ### HACS (recommended)
@@ -63,3 +68,15 @@ automation:
             launched lifeboat
             {{ state_attr('sensor.rnli_tower_latest_launch', 'lifeboat_id') }}
 ```
+
+## Support the RNLI
+
+Every launch this integration reports is a crew of volunteers heading out to
+help someone in trouble. The RNLI relies on donations to keep those lifeboats
+crewed, fuelled, and ready — around the clock, all year round.
+
+If you like this integration, the best thank-you isn't to me — it's to them:
+
+### 👉 [Donate to the RNLI](https://rnli.org/support-us/give-money/donate)
+
+Every little helps keep a lifeboat afloat. ⛑️🌊
