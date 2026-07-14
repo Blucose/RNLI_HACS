@@ -29,7 +29,8 @@ every 5 minutes.
 2. Search for **RNLI Lifeboat Launches**.
 3. Pick your lifeboat station from the dropdown. All 238 RNLI stations are
    listed (sourced from RNLI open data, with names refreshed from the live
-   launches feed), and you can also type a name manually if needed.
+   launches feed), sorted by distance from your Home Assistant home location
+   so your nearest station appears first. You can also type a name manually.
 
 You can add the integration multiple times to monitor several stations.
 
@@ -41,6 +42,9 @@ Each configured station gets a sensor like `sensor.rnli_tower_latest_launch`:
   has no launches in the recent feed).
 - **Attributes** — `lifeboat_id`, `station_title`, `station_website`,
   `launch_id`, `recent_launch_count`, and any other fields the feed provides.
+  Known stations also get `latitude`/`longitude` (so the sensor appears at
+  the station's location on the Home Assistant map), `station_url`,
+  `what3words`, and `station_type` (ALB/ILB) from RNLI open data.
 
 ## Example automation
 

@@ -13,8 +13,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import RNLIConfigEntry
-from .const import ATTRIBUTION, DOMAIN
+from .const import ATTRIBUTION, DOMAIN, normalize_station
 from .coordinator import RNLIUpdateCoordinator
+from .stations import STATIONS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +43,15 @@ class RNLILaunchSensor(CoordinatorEntity[RNLIUpdateCoordinator], SensorEntity):
         """Initialize the sensor."""
         super().__init__(coordinator)
         station = coordinator.station
+        station_key = normalize_station(station)
+        self._station_info = next(
+            (
+                info
+                for name, info in STATIONS.items()
+                if normalize_station(name) == station_key
+            ),
+            None,
+        )
         self._attr_name = f"RNLI {station} Latest Launch"
         self._attr_unique_id = (
             f"{DOMAIN}_{station.lower().replace(' ', '_')}_latest_launch"
@@ -51,6 +61,9 @@ class RNLILaunchSensor(CoordinatorEntity[RNLIUpdateCoordinator], SensorEntity):
             name=f"RNLI {station}",
             manufacturer="RNLI",
             entry_type=DeviceEntryType.SERVICE,
+            configuration_url=(
+                self._station_info["url"] if self._station_info else None
+            ),
         )
 
     @property
@@ -81,6 +94,13 @@ class RNLILaunchSensor(CoordinatorEntity[RNLIUpdateCoordinator], SensorEntity):
         attributes: dict[str, Any] = {
             "station_monitored": self.coordinator.station,
         }
+        if self._station_info:
+            # latitude/longitude place the sensor on the Home Assistant map
+            attributes["latitude"] = self._station_info["latitude"]
+            attributes["longitude"] = self._station_info["longitude"]
+            attributes["station_url"] = self._station_info["url"]
+            attributes["what3words"] = self._station_info["what3words"]
+            attributes["station_type"] = self._station_info["station_type"]
         launch = self._latest_launch
         if launch is None:
             attributes["last_launch_info"] = (

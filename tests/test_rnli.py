@@ -1,6 +1,7 @@
 """End-to-end test: config flow GUI -> entry -> sensor entity."""
 from datetime import datetime, timezone
 
+import pytest
 from homeassistant.core import HomeAssistant
 
 API_URL = "https://services.rnli.org/api/launches"
@@ -60,7 +61,8 @@ async def test_full_flow_creates_sensor(hass: HomeAssistant, aioclient_mock) -> 
         result["flow_id"], {"station_short_name": "Troon"}
     )
     assert result["type"] == "create_entry", result
-    assert result["title"] == "RNLI Troon, Strathclyde"
+    # the bundled station list's label wins over the feed title
+    assert result["title"] == "RNLI Troon, Ayrshire and Arran"
     await hass.async_block_till_done()
 
     state = hass.states.get("sensor.rnli_troon_latest_launch")
@@ -130,6 +132,28 @@ async def test_static_station_name_matches_feed_variant(
     state = hass.states.get("sensor.rnli_bangor_co_down_latest_launch")
     assert state is not None, hass.states.async_entity_ids()
     assert state.attributes["lifeboat_id"] == "B-999"
+    # station metadata from the bundled list, placing the sensor on the map
+    assert state.attributes["latitude"] == pytest.approx(54.66, abs=0.1)
+    assert state.attributes["longitude"] == pytest.approx(-5.67, abs=0.1)
+    assert state.attributes["station_type"] in ("ALB", "ILB")
+    assert state.attributes["station_url"].startswith("https://rnli.org/")
+
+
+async def test_dropdown_sorted_by_distance_from_home(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """With a home location set, the nearest station is offered first."""
+    aioclient_mock.get(API_URL, json=LAUNCHES)
+    hass.config.latitude = 55.55  # just up the road from Troon lifeboat station
+    hass.config.longitude = -4.68
+
+    result = await hass.config_entries.flow.async_init(
+        "rnli_launches", context={"source": "user"}
+    )
+    selector = result["data_schema"].schema["station_short_name"]
+    options = selector.config["options"]
+    assert options[0]["value"] == "Troon"
+    assert "(0 km)" in options[0]["label"]
 
 
 async def test_custom_station_no_launches(hass: HomeAssistant, aioclient_mock) -> None:

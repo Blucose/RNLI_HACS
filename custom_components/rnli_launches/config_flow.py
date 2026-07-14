@@ -10,6 +10,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util import location as location_util
 from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
@@ -37,12 +38,17 @@ class RNLIConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         """Initialize RNLI config flow."""
-        # Maps normalized station name -> (value to store, display label).
-        # Seeded with the bundled station list; the live feed is overlaid on
-        # top because its exact shortName spelling is what launches report.
-        self._stations: dict[str, tuple[str, str]] = {
-            normalize_station(name): (name, label)
-            for name, label in STATIONS.items()
+        # Maps normalized station name -> {value, label, latitude, longitude}.
+        # Seeded with the bundled station list; live feed spellings are
+        # overlaid on top because they are what launches report.
+        self._stations: dict[str, dict[str, Any]] = {
+            normalize_station(name): {
+                "value": name,
+                "label": info["label"],
+                "latitude": info["latitude"],
+                "longitude": info["longitude"],
+            }
+            for name, info in STATIONS.items()
         }
 
     async def _async_overlay_live_stations(self) -> None:
@@ -59,11 +65,35 @@ class RNLIConfigFlow(ConfigFlow, domain=DOMAIN):
 
         for launch in data:
             short_name = launch.get("shortName")
-            if short_name:
-                self._stations[normalize_station(short_name)] = (
-                    short_name,
-                    launch.get("title") or short_name,
+            if not short_name:
+                continue
+            key = normalize_station(short_name)
+            entry = self._stations.setdefault(key, {})
+            entry["value"] = short_name
+            entry.setdefault("label", launch.get("title") or short_name)
+
+    def _station_options(self) -> list[SelectOptionDict]:
+        """Build dropdown options, nearest to the home location first."""
+        home_lat = self.hass.config.latitude
+        home_lon = self.hass.config.longitude
+
+        def sort_key(entry: dict[str, Any]) -> tuple[int, float, str]:
+            if home_lat and home_lon and entry.get("latitude") is not None:
+                dist = location_util.distance(
+                    home_lat, home_lon, entry["latitude"], entry["longitude"]
                 )
+                if dist is not None:
+                    return (0, dist, entry["label"])
+            return (1, 0.0, entry["label"])
+
+        options = []
+        for entry in sorted(self._stations.values(), key=sort_key):
+            group, dist, _ = sort_key(entry)
+            label = entry["label"]
+            if group == 0:
+                label = f"{label} ({dist / 1000:.0f} km)"
+            options.append(SelectOptionDict(value=entry["value"], label=label))
+        return options
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -77,11 +107,9 @@ class RNLIConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(normalize_station(station))
                 self._abort_if_unique_id_configured()
 
-                _, label = self._stations.get(
-                    normalize_station(station), (station, station)
-                )
+                entry = self._stations.get(normalize_station(station), {})
                 return self.async_create_entry(
-                    title=f"RNLI {label}",
+                    title=f"RNLI {entry.get('label', station)}",
                     data={CONF_STATION: station},
                 )
             errors["base"] = "invalid_station"
@@ -93,12 +121,7 @@ class RNLIConfigFlow(ConfigFlow, domain=DOMAIN):
             # feed hiccup here is not fatal to setup.
             _LOGGER.warning("Could not fetch recent RNLI launches: %s", err)
 
-        options = [
-            SelectOptionDict(value=value, label=label)
-            for value, label in sorted(
-                self._stations.values(), key=lambda item: item[1]
-            )
-        ]
+        options = self._station_options()
         schema = vol.Schema(
             {
                 vol.Required(CONF_STATION): SelectSelector(
