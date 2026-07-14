@@ -1,3 +1,5 @@
+<img src="images/logo.png" alt="RNLI Lifeboats" width="200" align="right" />
+
 # RNLI Lifeboat Launches
 
 A Home Assistant integration that gives you information about the most recent
@@ -80,3 +82,10 @@ If you like this integration, the best thank-you isn't to me — it's to them:
 ### 👉 [Donate to the RNLI](https://rnli.org/support-us/give-money/donate)
 
 Every little helps keep a lifeboat afloat. ⛑️🌊
+
+---
+
+<sub>The RNLI name and logo are trademarks of the Royal National Lifeboat
+Institution (RNLI) and are used here with the RNLI's permission. This is an
+independent, community-built integration and is not officially endorsed by or
+affiliated with the RNLI. See [LOGO_LICENSE.md](LOGO_LICENSE.md).</sub>
