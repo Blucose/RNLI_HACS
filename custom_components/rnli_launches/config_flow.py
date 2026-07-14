@@ -17,7 +17,15 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
-from .const import CONF_STATION, DOMAIN, REQUEST_TIMEOUT, RNLI_API_URL
+from .const import (
+    CONF_STATION,
+    DOMAIN,
+    MAX_SHOUTS,
+    REQUEST_TIMEOUT,
+    RNLI_API_URL,
+    normalize_station,
+)
+from .stations import STATIONS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,23 +37,33 @@ class RNLIConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         """Initialize RNLI config flow."""
-        # Maps station shortName -> display title, e.g. "Troon" -> "Troon, Strathclyde"
-        self._stations: dict[str, str] = {}
+        # Maps normalized station name -> (value to store, display label).
+        # Seeded with the bundled station list; the live feed is overlaid on
+        # top because its exact shortName spelling is what launches report.
+        self._stations: dict[str, tuple[str, str]] = {
+            normalize_station(name): (name, label)
+            for name, label in STATIONS.items()
+        }
 
-    async def _async_fetch_stations(self) -> None:
-        """Populate the station list from the recent-launches feed."""
+    async def _async_overlay_live_stations(self) -> None:
+        """Overlay station names seen in the recent-launches feed."""
         session = async_get_clientsession(self.hass)
         async with asyncio.timeout(REQUEST_TIMEOUT):
             response = await session.get(
-                RNLI_API_URL, headers={"Accept": "application/json"}
+                RNLI_API_URL,
+                headers={"Accept": "application/json"},
+                params={"numberOfShouts": MAX_SHOUTS},
             )
             response.raise_for_status()
             data = await response.json()
 
         for launch in data:
             short_name = launch.get("shortName")
-            if short_name and short_name not in self._stations:
-                self._stations[short_name] = launch.get("title") or short_name
+            if short_name:
+                self._stations[normalize_station(short_name)] = (
+                    short_name,
+                    launch.get("title") or short_name,
+                )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -56,29 +74,29 @@ class RNLIConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             station = user_input[CONF_STATION].strip()
             if station:
-                await self.async_set_unique_id(station.lower())
+                await self.async_set_unique_id(normalize_station(station))
                 self._abort_if_unique_id_configured()
 
-                title = self._stations.get(station, station)
+                _, label = self._stations.get(
+                    normalize_station(station), (station, station)
+                )
                 return self.async_create_entry(
-                    title=f"RNLI {title}",
+                    title=f"RNLI {label}",
                     data={CONF_STATION: station},
                 )
             errors["base"] = "invalid_station"
 
-        if not self._stations:
-            try:
-                await self._async_fetch_stations()
-            except (aiohttp.ClientError, TimeoutError) as err:
-                _LOGGER.error("Error fetching RNLI stations: %s", err)
-                # The feed is only used to offer suggestions; the user can
-                # still type a station name manually, so just warn.
-                errors["base"] = "cannot_connect"
+        try:
+            await self._async_overlay_live_stations()
+        except (aiohttp.ClientError, TimeoutError) as err:
+            # The bundled station list still populates the dropdown, so a
+            # feed hiccup here is not fatal to setup.
+            _LOGGER.warning("Could not fetch recent RNLI launches: %s", err)
 
         options = [
-            SelectOptionDict(value=short_name, label=title)
-            for short_name, title in sorted(
-                self._stations.items(), key=lambda item: item[1]
+            SelectOptionDict(value=value, label=label)
+            for value, label in sorted(
+                self._stations.values(), key=lambda item: item[1]
             )
         ]
         schema = vol.Schema(

@@ -27,9 +27,9 @@ every 5 minutes.
 
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Search for **RNLI Lifeboat Launches**.
-3. Pick your lifeboat station from the dropdown. The list only shows stations
-   with recent launches — if yours isn't listed, type its short name as it
-   appears on rnli.org (e.g. `Tower` for rnli.org/Tower).
+3. Pick your lifeboat station from the dropdown. All 238 RNLI stations are
+   listed (sourced from RNLI open data, with names refreshed from the live
+   launches feed), and you can also type a name manually if needed.
 
 You can add the integration multiple times to monitor several stations.
 

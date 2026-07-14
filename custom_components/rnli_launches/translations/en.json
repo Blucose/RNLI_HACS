@@ -3,14 +3,13 @@
     "step": {
       "user": {
         "title": "RNLI Lifeboat Launches",
-        "description": "Choose the lifeboat station to monitor. The list shows stations with recent launches — if yours isn't listed, type its short name (as it appears on rnli.org, e.g. 'Tower').",
+        "description": "Choose the lifeboat station to monitor. All RNLI stations are listed — you can also type a name if yours is missing.",
         "data": {
           "station_short_name": "Lifeboat station"
         }
       }
     },
     "error": {
-      "cannot_connect": "Could not fetch the station list from the RNLI API. You can still type a station name manually.",
       "invalid_station": "Please choose or enter a station name."
     },
     "abort": {

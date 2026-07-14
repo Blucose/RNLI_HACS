@@ -12,7 +12,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_STATION, DOMAIN, REQUEST_TIMEOUT, RNLI_API_URL, SCAN_INTERVAL
+from .const import (
+    CONF_STATION,
+    DOMAIN,
+    MAX_SHOUTS,
+    REQUEST_TIMEOUT,
+    RNLI_API_URL,
+    SCAN_INTERVAL,
+    normalize_station,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +48,9 @@ class RNLIUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT):
                 response = await self.session.get(
-                    RNLI_API_URL, headers={"Accept": "application/json"}
+                    RNLI_API_URL,
+                    headers={"Accept": "application/json"},
+                    params={"numberOfShouts": MAX_SHOUTS},
                 )
                 response.raise_for_status()
                 data = await response.json()
@@ -50,10 +60,11 @@ class RNLIUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         if not isinstance(data, list):
             raise UpdateFailed("Unexpected response from RNLI API")
 
+        station_key = normalize_station(self.station)
         station_launches = [
             launch
             for launch in data
-            if (launch.get("shortName") or "").lower() == self.station.lower()
+            if normalize_station(launch.get("shortName") or "") == station_key
         ]
         # ISO 8601 date strings sort correctly as plain strings
         station_launches.sort(key=lambda x: x.get("launchDate") or "", reverse=True)
