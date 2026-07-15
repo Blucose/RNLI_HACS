@@ -1,8 +1,6 @@
-<img src="images/logo.png" alt="RNLI Lifeboats" width="200" align="right" />
-
 # RNLI Lifeboat Launches
 
-A Home Assistant integration that gives you information about the most recent
+An unofficial Home Assistant integration that gives you information about the most recent
 [RNLI](https://rnli.org) lifeboat launches from a station of your choice.
 
 It creates a sensor whose state is the timestamp of the station's latest
