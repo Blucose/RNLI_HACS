@@ -43,8 +43,10 @@ You can add the integration multiple times to monitor several stations.
 
 Each configured station gets a sensor like `sensor.rnli_tower_latest_launch`:
 
-- **State** — timestamp of the most recent launch (or unknown if the station
-  has no launches in the recent feed).
+- **State** — timestamp of the most recent launch. Once a launch has been
+  seen it is remembered and persists across Home Assistant restarts, even after
+  it scrolls out of the API's recent window; it only ever advances to a newer
+  launch. It reads `unknown` only until the station's first launch is seen.
 - **Attributes** — `lifeboat_id`, `station_title`, `station_website`,
   `launch_id`, `recent_launch_count`, and any other fields the feed provides.
   Known stations also get `latitude`/`longitude` (so the sensor appears at

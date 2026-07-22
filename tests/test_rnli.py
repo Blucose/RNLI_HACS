@@ -2,7 +2,11 @@
 from datetime import datetime, timezone
 
 import pytest
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    mock_restore_cache_with_extra_data,
+)
 
 API_URL = "https://services.rnli.org/api/launches"
 
@@ -175,3 +179,116 @@ async def test_custom_station_no_launches(hass: HomeAssistant, aioclient_mock) -
     assert state is not None
     assert state.state == "unknown"
     assert "last_launch_info" in state.attributes
+
+
+# A launch older than the API's recent window; the feed no longer lists it.
+OLD_TROON_LAUNCH = {
+    "shortName": "Troon",
+    "launchDate": "2026-01-01T09:00:00",
+    "id": 111,
+    "title": "Troon, Strathclyde",
+    "website": "rnli.org/Troon",
+    "lifeboat_IdNo": "13-99",
+}
+
+
+def _troon_entry() -> MockConfigEntry:
+    return MockConfigEntry(
+        domain="rnli_launches",
+        data={"station_short_name": "Troon"},
+        unique_id="troon",
+        title="RNLI Troon",
+    )
+
+
+async def test_last_launch_survives_restart_when_absent_from_feed(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """After a restart, the last known launch is restored even if the API no
+    longer lists it."""
+    feed_without_troon = [x for x in LAUNCHES if x["shortName"] != "Troon"]
+    aioclient_mock.get(API_URL, json=feed_without_troon)
+
+    entity_id = "sensor.rnli_troon_latest_launch"
+    mock_restore_cache_with_extra_data(
+        hass,
+        (
+            (
+                State(entity_id, "2026-01-01T09:00:00+00:00"),
+                {"last_launch": OLD_TROON_LAUNCH},
+            ),
+        ),
+    )
+
+    entry = _troon_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert datetime.fromisoformat(state.state) == datetime(
+        2026, 1, 1, 9, 0, tzinfo=timezone.utc
+    )
+    assert state.attributes["lifeboat_id"] == "13-99"
+    assert state.attributes["recent_launch_count"] == 0
+
+
+async def test_newer_launch_replaces_restored(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """A newer launch in the feed advances the restored last-known launch."""
+    aioclient_mock.get(API_URL, json=LAUNCHES)  # contains a July Troon launch
+
+    entity_id = "sensor.rnli_troon_latest_launch"
+    mock_restore_cache_with_extra_data(
+        hass,
+        (
+            (
+                State(entity_id, "2026-01-01T09:00:00+00:00"),
+                {"last_launch": OLD_TROON_LAUNCH},
+            ),
+        ),
+    )
+
+    entry = _troon_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(entity_id)
+    assert state is not None
+    # 14:28 UK time on 2026-07-14 (BST) == 13:28 UTC, the newer launch
+    assert datetime.fromisoformat(state.state) == datetime(
+        2026, 7, 14, 13, 28, tzinfo=timezone.utc
+    )
+    assert state.attributes["lifeboat_id"] == "13-55"
+
+
+async def test_last_launch_kept_when_station_drops_out_of_feed(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """A later refresh that no longer lists the station keeps the last launch."""
+    aioclient_mock.get(API_URL, json=LAUNCHES)
+
+    entry = _troon_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    entity_id = "sensor.rnli_troon_latest_launch"
+    assert hass.states.get(entity_id).attributes["lifeboat_id"] == "13-55"
+
+    # The station scrolls out of the recent window; refresh with a feed
+    # that no longer contains it.
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(API_URL, json=[x for x in LAUNCHES if x["shortName"] != "Troon"])
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get(entity_id)
+    assert datetime.fromisoformat(state.state) == datetime(
+        2026, 7, 14, 13, 28, tzinfo=timezone.utc
+    )
+    assert state.attributes["lifeboat_id"] == "13-55"
+    assert state.attributes["recent_launch_count"] == 0
