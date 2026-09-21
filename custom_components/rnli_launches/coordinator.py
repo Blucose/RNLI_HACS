@@ -2,74 +2,73 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
 import logging
-from typing import Any
 
-import aiohttp
-
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util.hass_dict import HassKey
 
-from .const import (
-    CONF_STATION,
-    DOMAIN,
-    MAX_SHOUTS,
-    REQUEST_TIMEOUT,
-    RNLI_API_URL,
-    SCAN_INTERVAL,
-    normalize_station,
-)
+from .api import Launch, RNLIApiError, async_fetch_launches
+from .const import DOMAIN, SCAN_INTERVAL, normalize_station
 
 _LOGGER = logging.getLogger(__name__)
 
+# Normalized station name -> that station's launches, newest first
+type LaunchesByStation = dict[str, list[Launch]]
 
-class RNLIUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
-    """Fetch RNLI launch data and filter it for one station."""
 
-    config_entry: ConfigEntry
+class RNLIUpdateCoordinator(DataUpdateCoordinator[LaunchesByStation]):
+    """Fetch the launches feed for every configured station.
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    The feed covers all stations, so one coordinator is shared by every
+    config entry instead of each station polling the same URL.
+    """
+
+    def __init__(self, hass: HomeAssistant) -> None:
         """Initialize the coordinator."""
-        self.station = entry.data[CONF_STATION]
-        self.session = async_get_clientsession(hass)
-
         super().__init__(
             hass,
             _LOGGER,
-            config_entry=entry,
-            name=f"{DOMAIN}_{self.station}",
+            # Shared by all entries rather than owned by any one of them
+            config_entry=None,
+            name=DOMAIN,
             update_interval=SCAN_INTERVAL,
         )
+        self.session = async_get_clientsession(hass)
 
-    async def _async_update_data(self) -> list[dict[str, Any]]:
-        """Fetch the latest launches for the configured station."""
+    async def _async_update_data(self) -> LaunchesByStation:
+        """Fetch the latest launches and group them by station."""
         try:
-            async with asyncio.timeout(REQUEST_TIMEOUT):
-                response = await self.session.get(
-                    RNLI_API_URL,
-                    headers={"Accept": "application/json"},
-                    params={"numberOfShouts": MAX_SHOUTS},
-                )
-                response.raise_for_status()
-                data = await response.json()
-        except (aiohttp.ClientError, TimeoutError) as err:
-            raise UpdateFailed(f"Error fetching data from RNLI API: {err}") from err
+            launches = await async_fetch_launches(self.session)
+        except RNLIApiError as err:
+            raise UpdateFailed(str(err)) from err
 
-        if not isinstance(data, list):
-            raise UpdateFailed("Unexpected response from RNLI API")
-
-        station_key = normalize_station(self.station)
-        station_launches = [
-            launch
-            for launch in data
-            if normalize_station(launch.get("shortName") or "") == station_key
-        ]
-        # ISO 8601 date strings sort correctly as plain strings
-        station_launches.sort(key=lambda x: x.get("launchDate") or "", reverse=True)
-
+        by_station: LaunchesByStation = {}
+        for launch in sorted(launches, key=lambda x: x.launch_time, reverse=True):
+            key = normalize_station(launch.short_name)
+            by_station.setdefault(key, []).append(launch)
         _LOGGER.debug(
-            "Found %d launches for %s", len(station_launches), self.station
+            "Fetched %d launches from %d stations", len(launches), len(by_station)
         )
-        return station_launches
+        return by_station
+
+    def launches_for(self, station: str) -> list[Launch]:
+        """Return a station's launches in the current feed, newest first."""
+        if not self.data:
+            return []
+        return self.data.get(normalize_station(station), [])
+
+
+@dataclass
+class RNLIData:
+    """Integration-wide state shared by every config entry."""
+
+    coordinator: RNLIUpdateCoordinator
+    entry_ids: set[str] = field(default_factory=set)
+    # Serializes the first fetch when several entries load at once
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
+DATA_KEY: HassKey[RNLIData] = HassKey(DOMAIN)

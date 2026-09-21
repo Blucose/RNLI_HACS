@@ -7,13 +7,41 @@
         "data": {
           "station_short_name": "Lifeboat station"
         }
+      },
+      "reconfigure": {
+        "title": "Change lifeboat station",
+        "description": "Choose a different lifeboat station to monitor. The entities for the old station are replaced with ones for the new station.",
+        "data": {
+          "station_short_name": "Lifeboat station"
+        }
       }
     },
     "error": {
-      "invalid_station": "Please choose or enter a station name."
+      "invalid_station": "Please choose or enter a station name.",
+      "station_too_long": "Station names can be at most 100 characters long."
     },
     "abort": {
-      "already_configured": "This lifeboat station is already configured."
+      "already_configured": "This lifeboat station is already configured.",
+      "reconfigure_successful": "The lifeboat station has been changed."
+    }
+  },
+  "entity": {
+    "event": {
+      "launch": {
+        "name": "Launch",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "launch": "Launch"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "latest_launch": {
+        "name": "Latest launch"
+      }
     }
   }
 }
