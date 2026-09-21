@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Keeps the SHA-pinned actions in ci.yml up to date
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  # Keeps the test harness, and so the tested Home Assistant version, current
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly

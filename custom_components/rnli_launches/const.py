@@ -1,5 +1,6 @@
 """Constants for the RNLI Launches integration."""
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 DOMAIN = "rnli_launches"
 RNLI_API_URL = "https://services.rnli.org/api/launches"
@@ -12,6 +13,22 @@ REQUEST_TIMEOUT = 10
 
 # The API caps numberOfShouts at 50
 MAX_SHOUTS = 50
+
+# A full feed of 50 launches is under 10 KB. Anything far larger is not the
+# feed we expect, so stop reading instead of buffering it all in memory.
+MAX_RESPONSE_BYTES = 1024 * 1024
+
+# Longest station name accepted from the setup form or from the feed
+MAX_STATION_LENGTH = 100
+
+# The RNLI feed reports launch times in UK local time without a UTC offset
+RNLI_TIMEZONE = ZoneInfo("Europe/London")
+
+EVENT_TYPE_LAUNCH = "launch"
+
+# Launches older than this are never announced as new, e.g. ones that
+# happened while Home Assistant was offline for a long time.
+MAX_EVENT_AGE = timedelta(hours=24)
 
 
 def normalize_station(name: str) -> str:
